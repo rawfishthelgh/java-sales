@@ -35,9 +35,9 @@ public class StockTrans {
     @Enumerated(EnumType.STRING)
     private MoveType moveType;
 
-    private Long plantId;
+    private Long plantId; // 내 매장
 
-    private Long targetPlantId;
+    private Long targetPlantId; // 거래 대상 매장, 매장에서 발생하는 판매출고는 null
 
     private Long materialId;
 

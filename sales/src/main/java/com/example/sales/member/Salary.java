@@ -32,5 +32,5 @@ public class Salary {
     @JoinColumn(name = "member_id")
     private Member member;
 
-    private BigDecimal amount;
+    private BigDecimal amount; // 급여
 }

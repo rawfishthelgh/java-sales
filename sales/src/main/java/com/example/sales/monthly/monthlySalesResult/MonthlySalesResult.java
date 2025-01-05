@@ -32,7 +32,7 @@ public class MonthlySalesResult {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private YearMonth yearMonth;
+    private YearMonth yearMonth; // 수불년월
 
     private BigDecimal revenue; // 매출액
 

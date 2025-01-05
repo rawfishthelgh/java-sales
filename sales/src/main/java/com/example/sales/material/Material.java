@@ -31,9 +31,9 @@ public class Material {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name;
+    private String name; // 자재명
 
-    private BigDecimal purchasePrice;
+    private BigDecimal purchasePrice; //구매단가
 
-    private BigDecimal salesPrice;
+    private BigDecimal salesPrice; // 판매단가
 }

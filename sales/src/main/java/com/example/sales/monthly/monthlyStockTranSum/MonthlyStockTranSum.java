@@ -32,13 +32,13 @@ public class MonthlyStockTranSum {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private YearMonth yearMonth;
+    private YearMonth yearMonth; // 수불년월
 
-    private BigDecimal beginInventoryAmount;
+    private BigDecimal beginInventoryAmount; // 기초재고액
 
-    private BigDecimal endInventoryAmount;
+    private BigDecimal endInventoryAmount; // 기말재고액
 
-    private BigDecimal MonthlyPurchaseAmount;
+    private BigDecimal MonthlyPurchaseAmount; // 당기매입액
 
-    private BigDecimal costOfGoodsSold;
+    private BigDecimal costOfGoodsSold; // 매출원가
 }
