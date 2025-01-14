@@ -4,12 +4,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
+
+import com.example.sales.plant.Plant;
 
 /**
  * packageName  : com.example.sales.stockTrans
@@ -32,7 +39,7 @@ public class MonthlySalesResult {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private YearMonth yearMonth; // 수불년월
+    private LocalDate yearMonth; // 수불년월
 
     private BigDecimal revenue; // 매출액
 
@@ -43,5 +50,9 @@ public class MonthlySalesResult {
     private BigDecimal sellingGeneralAndAdministrativeExpenses; //판관비
 
     private BigDecimal operatingProfit; //영업이익
+
+    @ManyToOne
+    @JoinColumn(name = "plant_id")
+    private Plant plant;
 
 }
