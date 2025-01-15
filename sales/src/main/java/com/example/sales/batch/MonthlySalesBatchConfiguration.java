@@ -1,7 +1,6 @@
 package com.example.sales.batch;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 
@@ -21,10 +20,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.example.sales.monthly.monthlySalesResult.MonthlySalesResult;
-import com.example.sales.monthly.monthlySalesResult.MonthlySalesResultRepository;
 import com.example.sales.monthly.monthlyStockTranSum.MonthlyStockTranSum;
 import com.example.sales.plant.Plant;
-import com.example.sales.plant.StoreRepository;
+import com.example.sales.stockTrans.MoveType;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -41,19 +39,23 @@ public class MonthlySalesBatchConfiguration {
 	private final DataSource dataSource;
 	private final EntityManagerFactory entityManagerFactory;
 	private final EntityManager entityManager;
+
 	@Bean
 	public Job monthlySalesJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
 		return new JobBuilder("monthlySalesJob", jobRepository)
 			.start(monthlySalesSumStep(jobRepository, transactionManager))
-			.next()
+			.next(monthlySalesResultStep(jobRepository, transactionManager))
 			.build();
 	}
+
 	@Bean
 	public Step monthlySalesResultStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
 
 		return new StepBuilder("monthlySalesResultStep", jobRepository)
 			.<Long, MonthlySalesResult>chunk(CHUNK_SIZE, transactionManager)
 			.reader(plantIdReader())
+			.processor(monthlySalesResultProcessor())
+			.writer(monthlySalesResultWriter())
 			.build();
 	}
 
@@ -68,8 +70,6 @@ public class MonthlySalesBatchConfiguration {
 			.build();
 	}
 
-
-
 	@Bean
 	public ItemReader<Long> plantIdReader() {
 		return new JpaPagingItemReaderBuilder<Long>()
@@ -81,22 +81,79 @@ public class MonthlySalesBatchConfiguration {
 	}
 
 	@Bean
-	public ItemProcessor<Long, MonthlyStockTranSum> monthlySalesResultProcessor() {
+	public ItemProcessor<Long, MonthlySalesResult> monthlySalesResultProcessor() {
 		return plantId -> {
 			log.info("Processing plantId: {}", plantId);
 			YearMonth currentMonth = YearMonth.now().minusMonths(1);
-			YearMonth previousMonth = currentMonth.minusMonths(1);
 
-			BigDecimal revenue; // 매출액
+			// 매출액
+			BigDecimal revenue = entityManager.createQuery(
+					"SELECT COALESCE(SUM(s.quantity * m.salesPrice),0)" +
+						"FROM StockTrans s JOIN Material m ON s.materialId = m.id "
+						+ "WHERE s.stockTransType = 'OUT' "
+						+ "AND s.moveType = 'STORE_SALES' "
+						+ "AND s.plantId = :plantId "
+						+ "AND s.stockTransDateTime "
+						+ "BETWEEN :start AND :end", BigDecimal.class)
+				.setParameter("plantId", plantId)
+				.setParameter("start", currentMonth.atDay(1).atStartOfDay())
+				.setParameter("end", currentMonth.atEndOfMonth().atTime(23, 59, 59))
+				.getSingleResult();
 
-			BigDecimal costOfGoodsSold; // 매출원가
+			// 매출원가
+			BigDecimal costOfGoodsSold = entityManager.createQuery(
+					"SELECT s.costOfGoodsSold "
+						+ "FROM MonthlyStockTranSum s "
+						+ "WHERE s.plant.id = :plantId "
+						+ "AND s.yearMonth = :currentMonth"
+					, BigDecimal.class)
+				.setParameter("plantId", plantId)
+				.setParameter("currentMonth", currentMonth)
+				.getSingleResult();
 
-			BigDecimal grossProfit; //매출총이익
+			//매출총이익
+			BigDecimal grossProfit = revenue.subtract(costOfGoodsSold);
 
-			BigDecimal sellingGeneralAndAdministrativeExpenses; //판관비
+			//판관비
+			BigDecimal sellingGeneralAndAdministrativeExpenses = entityManager.createQuery(
+					"SELECT COALESCE(SUM(s.quantity * m.purchasePrice),0)" +
+						"FROM StockTrans s JOIN Material m ON s.materialId = m.id " +
+						"WHERE s.stockTransType = 'OUT' " +
+						"AND s.plantId = :plantId " +
+						"AND s.moveType IN :expenses " +
+						"AND s.stockTransDateTime " +
+						"BETWEEN :start AND :end", BigDecimal.class)
+				.setParameter("plantId", plantId)
+				.setParameter("start", currentMonth.atDay(1).atStartOfDay())
+				.setParameter("end", currentMonth.atEndOfMonth().atTime(23, 59, 59))
+				.setParameter("expenses", List.of(MoveType.SALARY))
+				.getSingleResult();
 
-			BigDecimal operatingProfit; //영업이익
-		}
+			//영업이익
+			BigDecimal operatingProfit = grossProfit.subtract(sellingGeneralAndAdministrativeExpenses);
+
+			return MonthlySalesResult.builder()
+				.yearMonth(currentMonth.atDay(1))
+				.revenue(revenue)
+				.costOfGoodsSold(costOfGoodsSold)
+				.grossProfit(grossProfit)
+				.sellingGeneralAndAdministrativeExpenses(sellingGeneralAndAdministrativeExpenses)
+				.operatingProfit(operatingProfit)
+				.plant(Plant.builder()
+					.id(plantId)
+					.build())
+				.build();
+		};
+	}
+
+	@Bean
+	public ItemWriter<MonthlySalesResult> monthlySalesResultWriter() {
+		return items -> {
+			for (MonthlySalesResult item : items) {
+				entityManager.persist(item);
+				log.info("Saved MonthlySalesResult: {}", item);
+			}
+		};
 	}
 
 	@Bean
